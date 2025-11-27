@@ -39,7 +39,7 @@ class LuciqDioInterceptor extends Interceptor {
     Response<dynamic> response,
     ResponseInterceptorHandler handler,
   ) {
-    final data = _map(response);
+    final data = _mapResponse(response);
     _networklogger.networkLog(data);
     handler.next(response);
   }
@@ -48,10 +48,8 @@ class LuciqDioInterceptor extends Interceptor {
   // Keep `DioError` instead of `DioException` for backward-compatibility, for now.
   // ignore: deprecated_member_use
   void onError(DioError err, ErrorInterceptorHandler handler) {
-    if (err.response != null) {
-      final data = _map(err.response!);
-      _networklogger.networkLog(data);
-    }
+    final data = _mapError(err);
+    _networklogger.networkLog(data);
 
     handler.next(err);
   }
@@ -62,13 +60,49 @@ class LuciqDioInterceptor extends Interceptor {
     return data;
   }
 
-  NetworkData _map(Response<dynamic> response) {
+  NetworkData _mapError(DioException err) {
+    if (err.response != null) {
+      return _mapResponse(err.response!);
+    }
+
+    final data = _getRequestData(err.requestOptions.hashCode);
+
+    final endTime = DateTime.now();
+
+    var requestBodySize = 0;
+    if (err.requestOptions.headers.containsKey('content-length')) {
+      requestBodySize = int.parse(
+        err.requestOptions.headers['content-length'] ?? '0',
+      );
+    } else if (err.requestOptions.data != null) {
+      requestBodySize = err.requestOptions.data?.toString().length ?? 0;
+    }
+
+    return data.copyWith(
+      endTime: endTime,
+      duration: endTime.difference(data.startTime).inMicroseconds,
+      url: err.requestOptions.uri.toString(),
+      method: err.requestOptions.method,
+      requestBody: err.requestOptions.data?.toString() ?? '',
+      requestHeaders: err.requestOptions.headers,
+      requestContentType: err.requestOptions.contentType ?? '',
+      requestBodySize: requestBodySize,
+      status: 0,
+      responseBody: '',
+      responseHeaders: <String, dynamic>{},
+      responseContentType: '',
+      responseBodySize: 0,
+    );
+  }
+
+  NetworkData _mapResponse(Response<dynamic> response) {
     final data = _getRequestData(response.requestOptions.hashCode);
     final responseHeaders = <String, dynamic>{};
     final endTime = DateTime.now();
 
-    response.headers
-        .forEach((String name, dynamic value) => responseHeaders[name] = value);
+    response.headers.forEach(
+      (String name, dynamic value) => responseHeaders[name] = value,
+    );
 
     var responseContentType = '';
     if (responseHeaders.containsKey('content-type')) {
@@ -77,8 +111,9 @@ class LuciqDioInterceptor extends Interceptor {
 
     var requestBodySize = 0;
     if (response.requestOptions.headers.containsKey('content-length')) {
-      requestBodySize =
-          int.parse(response.requestOptions.headers['content-length'] ?? '0');
+      requestBodySize = int.parse(
+        response.requestOptions.headers['content-length'] ?? '0',
+      );
     } else if (response.requestOptions.data != null) {
       // Calculate actual byte size for more accurate size estimation
       requestBodySize = _calculateBodySize(response.requestOptions.data);
