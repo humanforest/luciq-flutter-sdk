@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/widgets.dart';
 import 'package:luciq_flutter/luciq_flutter.dart';
 
 class LuciqDioInterceptor extends Interceptor {
@@ -147,7 +148,23 @@ class LuciqDioInterceptor extends Interceptor {
 
   String parseBody(dynamic data) {
     try {
-      return jsonEncode(data);
+      debugPrint('luciq type: ${data.runtimeType}');
+
+      final encoded = jsonEncode(data);
+      final decoded = jsonDecode(encoded);
+
+      // Remove sensitive fields
+      if (decoded is Map<String, dynamic>) {
+        _removeSensitiveFields(decoded);
+      } else if (decoded is List) {
+        for (final item in decoded) {
+          if (item is Map<String, dynamic>) {
+            _removeSensitiveFields(item);
+          }
+        }
+      }
+
+      return jsonEncode(decoded);
     } catch (e) {
       return data.toString();
     }
@@ -170,5 +187,28 @@ class LuciqDioInterceptor extends Interceptor {
       // Fallback to string conversion if JSON encoding fails
       return data.toString().codeUnits.length;
     }
+  }
+
+  void _removeSensitiveFields(Map<String, dynamic> map) {
+    final sensitiveKeys = [
+      'password',
+      'currentPassword',
+    ];
+
+    map.forEach((key, value) {
+      final lowerKey = key.toLowerCase();
+
+      if (sensitiveKeys.any((sensitive) => lowerKey.contains(sensitive))) {
+        map[key] = '***REDACTED***';
+      } else if (value is Map<String, dynamic>) {
+        _removeSensitiveFields(value);
+      } else if (value is List) {
+        for (final item in value) {
+          if (item is Map<String, dynamic>) {
+            _removeSensitiveFields(item);
+          }
+        }
+      }
+    });
   }
 }
