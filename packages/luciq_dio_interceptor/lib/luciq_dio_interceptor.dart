@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/widgets.dart';
 import 'package:luciq_flutter/luciq_flutter.dart';
 
 class LuciqDioInterceptor extends Interceptor {
@@ -146,10 +147,40 @@ class LuciqDioInterceptor extends Interceptor {
   }
 
   String parseBody(dynamic data) {
+    if (data == null) return '';
+
     try {
-      return jsonEncode(data);
-    } catch (e) {
+      if (data is String) return data;
+
+      if (data is Map<String, dynamic> || data is List) {
+        final dynamic clone = _cloneData(data);
+        _removeSensitiveFieldsRecursive(clone);
+        return jsonEncode(clone);
+      }
+
       return data.toString();
+    } catch (e) {
+      return 'Error parsing body: ${e.toString()}';
+    }
+  }
+
+  dynamic _cloneData(dynamic data) {
+    if (data is Map<String, dynamic>) {
+      return Map<String, dynamic>.from(
+          data.map((key, value) => MapEntry(key, _cloneData(value))));
+    } else if (data is List) {
+      return List.from(data.map((item) => _cloneData(item)));
+    }
+    return data;
+  }
+
+  void _removeSensitiveFieldsRecursive(dynamic data) {
+    if (data is Map<String, dynamic>) {
+      _removeSensitiveFields(data);
+    } else if (data is List) {
+      for (var item in data) {
+        _removeSensitiveFieldsRecursive(item);
+      }
     }
   }
 
@@ -170,5 +201,28 @@ class LuciqDioInterceptor extends Interceptor {
       // Fallback to string conversion if JSON encoding fails
       return data.toString().codeUnits.length;
     }
+  }
+
+  void _removeSensitiveFields(Map<String, dynamic> map) {
+    final sensitiveKeys = [
+      'password',
+      'currentPassword',
+    ];
+
+    map.forEach((key, value) {
+      final lowerKey = key.toLowerCase();
+
+      if (sensitiveKeys.any((sensitive) => lowerKey.contains(sensitive))) {
+        map[key] = '***REDACTED***';
+      } else if (value is Map<String, dynamic>) {
+        _removeSensitiveFields(value);
+      } else if (value is List) {
+        for (final item in value) {
+          if (item is Map<String, dynamic>) {
+            _removeSensitiveFields(item);
+          }
+        }
+      }
+    });
   }
 }
