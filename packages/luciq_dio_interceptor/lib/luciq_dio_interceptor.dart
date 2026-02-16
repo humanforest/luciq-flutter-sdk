@@ -148,8 +148,6 @@ class LuciqDioInterceptor extends Interceptor {
 
   String parseBody(dynamic data) {
     try {
-      debugPrint('luciq type: ${data.runtimeType}');
-
       final encoded = jsonEncode(data);
       final decoded = jsonDecode(encoded);
 
