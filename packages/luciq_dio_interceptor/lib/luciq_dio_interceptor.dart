@@ -147,24 +147,40 @@ class LuciqDioInterceptor extends Interceptor {
   }
 
   String parseBody(dynamic data) {
-    try {
-      final encoded = jsonEncode(data);
-      final decoded = jsonDecode(encoded);
+    if (data == null) return '';
 
-      // Remove sensitive fields
-      if (decoded is Map<String, dynamic>) {
-        _removeSensitiveFields(decoded);
-      } else if (decoded is List) {
-        for (final item in decoded) {
-          if (item is Map<String, dynamic>) {
-            _removeSensitiveFields(item);
-          }
-        }
+    try {
+      if (data is String) return data;
+
+      if (data is Map<String, dynamic> || data is List) {
+        final dynamic clone = _cloneData(data);
+        _removeSensitiveFieldsRecursive(clone);
+        return jsonEncode(clone);
       }
 
-      return jsonEncode(decoded);
-    } catch (e) {
       return data.toString();
+    } catch (e) {
+      return 'Error parsing body: ${e.toString()}';
+    }
+  }
+
+  dynamic _cloneData(dynamic data) {
+    if (data is Map<String, dynamic>) {
+      return Map<String, dynamic>.from(
+          data.map((key, value) => MapEntry(key, _cloneData(value))));
+    } else if (data is List) {
+      return List.from(data.map((item) => _cloneData(item)));
+    }
+    return data;
+  }
+
+  void _removeSensitiveFieldsRecursive(dynamic data) {
+    if (data is Map<String, dynamic>) {
+      _removeSensitiveFields(data);
+    } else if (data is List) {
+      for (var item in data) {
+        _removeSensitiveFieldsRecursive(item);
+      }
     }
   }
 
