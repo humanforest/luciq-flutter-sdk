@@ -1,8 +1,6 @@
 import 'dart:convert';
-import 'dart:developer';
 
 import 'package:dio/dio.dart';
-import 'package:flutter/widgets.dart';
 import 'package:luciq_flutter/luciq_flutter.dart';
 
 class LuciqDioInterceptor extends Interceptor {
