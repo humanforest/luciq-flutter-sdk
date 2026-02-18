@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
-import 'package:flutter/widgets.dart';
 import 'package:luciq_flutter/luciq_flutter.dart';
 
 class LuciqDioInterceptor extends Interceptor {
@@ -147,40 +146,24 @@ class LuciqDioInterceptor extends Interceptor {
   }
 
   String parseBody(dynamic data) {
-    if (data == null) return '';
-
     try {
-      if (data is String) return data;
+      final encoded = jsonEncode(data);
+      final decoded = jsonDecode(encoded);
 
-      if (data is Map<String, dynamic> || data is List) {
-        final dynamic clone = _cloneData(data);
-        _removeSensitiveFieldsRecursive(clone);
-        return jsonEncode(clone);
+      // Remove sensitive fields
+      if (decoded is Map<String, dynamic>) {
+        _removeSensitiveFields(decoded);
+      } else if (decoded is List) {
+        for (final item in decoded) {
+          if (item is Map<String, dynamic>) {
+            _removeSensitiveFields(item);
+          }
+        }
       }
 
-      return data.toString();
+      return jsonEncode(decoded);
     } catch (e) {
       return 'Error parsing body: ${e.toString()}';
-    }
-  }
-
-  dynamic _cloneData(dynamic data) {
-    if (data is Map<String, dynamic>) {
-      return Map<String, dynamic>.from(
-          data.map((key, value) => MapEntry(key, _cloneData(value))));
-    } else if (data is List) {
-      return List.from(data.map((item) => _cloneData(item)));
-    }
-    return data;
-  }
-
-  void _removeSensitiveFieldsRecursive(dynamic data) {
-    if (data is Map<String, dynamic>) {
-      _removeSensitiveFields(data);
-    } else if (data is List) {
-      for (var item in data) {
-        _removeSensitiveFieldsRecursive(item);
-      }
     }
   }
 
