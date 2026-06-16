@@ -191,6 +191,8 @@ class LuciqDioInterceptor extends Interceptor {
       'password',
       'currentPassword',
       'client_secret',
+      'access_token',
+      'refresh_token',
     ];
 
     map.forEach((key, value) {
@@ -212,10 +214,12 @@ class LuciqDioInterceptor extends Interceptor {
     });
   }
 
-  // Detects Stripe payment method tokens (pm_*) and client secrets (pi_*_secret_*, seti_*_secret_*)
+  // Detects Stripe tokens (pm_*, client secrets) and JWT bearer tokens
   bool _isStripeToken(String value) {
     if (value.startsWith('pm_')) return true;
     if (RegExp(r'^[a-z]{2,}_[A-Za-z0-9]+_secret_').hasMatch(value)) return true;
+    // JWTs always start with base64url-encoded '{"' → eyJ
+    if (value.startsWith('eyJ')) return true;
     return false;
   }
 }
