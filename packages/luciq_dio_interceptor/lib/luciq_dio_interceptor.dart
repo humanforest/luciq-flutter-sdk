@@ -190,12 +190,17 @@ class LuciqDioInterceptor extends Interceptor {
     final sensitiveKeys = [
       'password',
       'currentPassword',
+      'client_secret',
+      'access_token',
+      'refresh_token',
     ];
 
     map.forEach((key, value) {
       final lowerKey = key.toLowerCase();
 
       if (sensitiveKeys.any((sensitive) => lowerKey.contains(sensitive))) {
+        map[key] = '***REDACTED***';
+      } else if (value is String && _isStripeToken(value)) {
         map[key] = '***REDACTED***';
       } else if (value is Map<String, dynamic>) {
         _removeSensitiveFields(value);
@@ -207,5 +212,14 @@ class LuciqDioInterceptor extends Interceptor {
         }
       }
     });
+  }
+
+  // Detects Stripe tokens (pm_*, client secrets) and JWT bearer tokens
+  bool _isStripeToken(String value) {
+    if (value.startsWith('pm_')) return true;
+    if (RegExp(r'^[a-z]{2,}_[A-Za-z0-9]+_secret_').hasMatch(value)) return true;
+    // JWTs always start with base64url-encoded '{"' → eyJ
+    if (value.startsWith('eyJ')) return true;
+    return false;
   }
 }
