@@ -35,6 +35,10 @@ Future<void> main() async {
         'isW3cExternalTraceIDEnabled': true,
       }),
     );
+    when(mHost.getNetworkBodyMaxSize()).thenAnswer(
+      (_) => Future.value(10240),
+    );
+    when(mHost.networkLog(any)).thenAnswer((_) => Future<void>.value());
   });
 
   const fakeResponse = <String, String>{
@@ -190,6 +194,28 @@ Future<void> main() async {
     luciqHttpClient.close();
 
     verify(luciqHttpClient.client.close());
+  });
+
+  test('LuciqHttpLogger redacts phone numbers in logged request/response bodies', () async {
+    final request = http.Request('POST', url)
+      ..body = json.encode(<String, String>{'phoneNumber': '+447911123456'});
+    final response = http.Response(
+      json.encode(<String, String>{'phoneNumber': '+447911123456', 'status': 'sent'}),
+      200,
+      request: request,
+    );
+
+    LuciqHttpLogger().onLogger(response, startTime: DateTime.now());
+    await untilCalled(mHost.networkLog(any));
+
+    final captured = verify(mHost.networkLog(captureAny)).captured.single as Map<Object?, Object?>;
+    final loggedRequestBody = captured['requestBody']! as String;
+    final loggedResponseBody = captured['responseBody']! as String;
+
+    expect(loggedRequestBody, isNot(contains('+447911123456')));
+    expect(loggedResponseBody, isNot(contains('+447911123456')));
+    expect(loggedRequestBody, contains('***REDACTED***'));
+    expect(loggedResponseBody, contains('***REDACTED***'));
   });
 
   test('stress test for GET method', () async {

@@ -116,4 +116,55 @@ void main() {
     }
     expect(luciqDioInterceptor.requestCount, 1000);
   });
+
+  group('parseBody redacts phone numbers', () {
+    test('redacts phoneNumber field on phone-verification send/verify payloads', () {
+      final body = luciqDioInterceptor.parseBody(<String, dynamic>{
+        'phoneNumber': '+447911123456',
+        'countryCode': 'GB',
+      });
+
+      expect(body, contains('"phoneNumber":"***REDACTED***"'));
+      expect(body, isNot(contains('+447911123456')));
+      expect(body, contains('"countryCode":"GB"'));
+    });
+
+    test('redacts snake_case and msisdn/mobile key variants', () {
+      final body = luciqDioInterceptor.parseBody(<String, dynamic>{
+        'phone_number': '+447911123456',
+        'msisdn': '+447911123456',
+        'mobile_number': '+447911123456',
+      });
+
+      expect(body, isNot(contains('+447911123456')));
+    });
+
+    test('redacts sign-up payload nested phone number', () {
+      final body = luciqDioInterceptor.parseBody(<String, dynamic>{
+        'email': 'user@example.com',
+        'profile': <String, dynamic>{'phoneNumber': '+15551234567'},
+      });
+
+      expect(body, contains('"email":"user@example.com"'));
+      expect(body, isNot(contains('+15551234567')));
+    });
+
+    test('redacts E.164 phone number even under an unrelated key name', () {
+      final body = luciqDioInterceptor.parseBody(<String, dynamic>{
+        'identifier': '+447911123456',
+      });
+
+      expect(body, contains('"identifier":"***REDACTED***"'));
+    });
+
+    test('does not redact non-phone numeric values', () {
+      final body = luciqDioInterceptor.parseBody(<String, dynamic>{
+        'orderId': '123456789',
+        'amount': 42,
+      });
+
+      expect(body, contains('"orderId":"123456789"'));
+      expect(body, contains('"amount":42'));
+    });
+  });
 }

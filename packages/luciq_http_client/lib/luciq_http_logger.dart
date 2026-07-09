@@ -32,7 +32,7 @@ class LuciqHttpLogger {
       method: request.method,
       url: request.url.toString(),
       requestHeaders: requestHeaders,
-      requestBody: requestBody,
+      requestBody: redactNetworkBody(requestBody),
       w3cHeader: w3CHeader,
     );
 
@@ -66,7 +66,7 @@ class LuciqHttpLogger {
             ? response.headers['content-type']
             : '',
         responseHeaders: responseHeaders,
-        responseBody: response.body,
+        responseBody: redactNetworkBody(response.body),
         requestBodySize: requestBodySize,
         responseBodySize: responseBodySize,
         requestContentType: request.headers.containsKey('content-type')
