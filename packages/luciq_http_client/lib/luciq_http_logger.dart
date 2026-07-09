@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import 'package:luciq_flutter/luciq_flutter.dart';
+import 'package:luciq_http_client/src/network_body_redactor.dart';
 
 class LuciqHttpLogger {
   void onLogger(
