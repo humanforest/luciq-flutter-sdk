@@ -20,6 +20,7 @@ export 'src/modules/surveys.dart';
 // Utils
 export 'src/utils/luciq_navigator_observer.dart';
 export 'src/utils/luciq_widget.dart';
+export 'src/utils/network_body_redactor.dart';
 export 'src/utils/private_views/luciq_private_view.dart';
 export 'src/utils/private_views/luciq_sliver_private_view.dart';
 export 'src/utils/private_views/private_views_manager.dart' show AutoMasking;

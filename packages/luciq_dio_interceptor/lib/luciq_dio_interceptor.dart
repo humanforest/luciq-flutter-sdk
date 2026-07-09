@@ -145,27 +145,7 @@ class LuciqDioInterceptor extends Interceptor {
     );
   }
 
-  String parseBody(dynamic data) {
-    try {
-      final encoded = jsonEncode(data);
-      final decoded = jsonDecode(encoded);
-
-      // Remove sensitive fields
-      if (decoded is Map<String, dynamic>) {
-        _removeSensitiveFields(decoded);
-      } else if (decoded is List) {
-        for (final item in decoded) {
-          if (item is Map<String, dynamic>) {
-            _removeSensitiveFields(item);
-          }
-        }
-      }
-
-      return jsonEncode(decoded);
-    } catch (e) {
-      return 'Error parsing body: ${e.toString()}';
-    }
-  }
+  String parseBody(dynamic data) => redactNetworkBody(data);
 
   /// Calculates the actual byte size of the body data
   int _calculateBodySize(dynamic data) {
@@ -186,40 +166,4 @@ class LuciqDioInterceptor extends Interceptor {
     }
   }
 
-  void _removeSensitiveFields(Map<String, dynamic> map) {
-    final sensitiveKeys = [
-      'password',
-      'currentPassword',
-      'client_secret',
-      'access_token',
-      'refresh_token',
-    ];
-
-    map.forEach((key, value) {
-      final lowerKey = key.toLowerCase();
-
-      if (sensitiveKeys.any((sensitive) => lowerKey.contains(sensitive))) {
-        map[key] = '***REDACTED***';
-      } else if (value is String && _isStripeToken(value)) {
-        map[key] = '***REDACTED***';
-      } else if (value is Map<String, dynamic>) {
-        _removeSensitiveFields(value);
-      } else if (value is List) {
-        for (final item in value) {
-          if (item is Map<String, dynamic>) {
-            _removeSensitiveFields(item);
-          }
-        }
-      }
-    });
-  }
-
-  // Detects Stripe tokens (pm_*, client secrets) and JWT bearer tokens
-  bool _isStripeToken(String value) {
-    if (value.startsWith('pm_')) return true;
-    if (RegExp(r'^[a-z]{2,}_[A-Za-z0-9]+_secret_').hasMatch(value)) return true;
-    // JWTs always start with base64url-encoded '{"' → eyJ
-    if (value.startsWith('eyJ')) return true;
-    return false;
-  }
 }
