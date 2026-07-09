@@ -47,5 +47,55 @@ void main() {
 
       expect(body, contains('"orderId":"123456789"'));
     });
+
+    test('does not false-positive redact keys that merely contain "phone" as a substring', () {
+      final body = redactNetworkBody(<String, dynamic>{
+        'microphoneEnabled': true,
+        'headphoneJack': 'present',
+      });
+
+      expect(body, contains('"microphoneEnabled":true'));
+      expect(body, contains('"headphoneJack":"present"'));
+    });
+
+    test('still redacts snake_case and camelCase phone keys via word matching', () {
+      final body = redactNetworkBody(<String, dynamic>{
+        'phone_number': '+447911123456',
+        'contactPhone': '+15551234567',
+      });
+
+      expect(body, isNot(contains('+447911123456')));
+      expect(body, isNot(contains('+15551234567')));
+    });
+
+    test('redacts raw phone numbers in a top-level array', () {
+      final body = redactNetworkBody(<dynamic>['+447911123456', 'not-a-phone']);
+
+      expect(body, isNot(contains('+447911123456')));
+      expect(body, contains('***REDACTED***'));
+      expect(body, contains('not-a-phone'));
+    });
+
+    test('keeps a non-JSON plain-text body for diagnostics', () {
+      expect(redactNetworkBody('OK'), 'OK');
+      expect(redactNetworkBody('<html>Bad Gateway</html>'), '<html>Bad Gateway</html>');
+    });
+
+    test('redacts a bare non-JSON phone number instead of erroring', () {
+      expect(redactNetworkBody('+447911123456'), '***REDACTED***');
+    });
+
+    test('redacts raw phone numbers in a nested array', () {
+      final body = redactNetworkBody(<String, dynamic>{
+        'recipients': <dynamic>[
+          '+447911123456',
+          <dynamic>['+15551234567'],
+        ],
+      });
+
+      expect(body, isNot(contains('+447911123456')));
+      expect(body, isNot(contains('+15551234567')));
+      expect(body, contains('***REDACTED***'));
+    });
   });
 }

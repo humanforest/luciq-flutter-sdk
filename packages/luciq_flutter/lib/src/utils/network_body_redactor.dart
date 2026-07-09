@@ -26,39 +26,70 @@ String redactNetworkBody(dynamic data) {
     if (decoded is Map<String, dynamic>) {
       _removeSensitiveFields(decoded);
     } else if (decoded is List) {
-      for (final item in decoded) {
-        if (item is Map<String, dynamic>) {
-          _removeSensitiveFields(item);
-        }
-      }
+      _removeSensitiveFieldsFromList(decoded);
     } else if (decoded is String && _isPhoneNumber(decoded)) {
       return jsonEncode('***REDACTED***');
     }
 
     return jsonEncode(decoded);
   } catch (e) {
+    // Not JSON (e.g. plain text, HTML, form-encoded body) — keep the original
+    // content for diagnostics, redacting it only if it's a bare sensitive value.
+    if (data is String) {
+      return _isStripeToken(data) || _isPhoneNumber(data) ? '***REDACTED***' : data;
+    }
     return 'Error parsing body: $e';
   }
 }
 
+// Splits a key into lowercase word tokens on camelCase boundaries and
+// separators (_, -, space), so 'phone' matches 'phoneNumber'/'phone_number'
+// but not 'microphoneEnabled'/'headphoneJack'.
+List<String> _wordsOf(String key) {
+  final withBoundaries = key.replaceAllMapped(
+    RegExp('([a-z0-9])([A-Z])'),
+    (m) => '${m[1]}_${m[2]}',
+  );
+  return withBoundaries
+      .toLowerCase()
+      .split(RegExp('[^a-z0-9]+'))
+      .where((word) => word.isNotEmpty)
+      .toList();
+}
+
+bool _matchesSensitiveKey(String key) {
+  final normalized = '_${_wordsOf(key).join('_')}_';
+  return _sensitiveKeys.any(
+    (sensitive) => normalized.contains('_${_wordsOf(sensitive).join('_')}_'),
+  );
+}
+
 void _removeSensitiveFields(Map<String, dynamic> map) {
   map.forEach((key, value) {
-    final lowerKey = key.toLowerCase();
-
-    if (_sensitiveKeys.any((sensitive) => lowerKey.contains(sensitive))) {
+    if (_matchesSensitiveKey(key)) {
       map[key] = '***REDACTED***';
     } else if (value is String && (_isStripeToken(value) || _isPhoneNumber(value))) {
       map[key] = '***REDACTED***';
     } else if (value is Map<String, dynamic>) {
       _removeSensitiveFields(value);
     } else if (value is List) {
-      for (final item in value) {
-        if (item is Map<String, dynamic>) {
-          _removeSensitiveFields(item);
-        }
-      }
+      _removeSensitiveFieldsFromList(value);
     }
   });
+}
+
+void _removeSensitiveFieldsFromList(List<dynamic> list) {
+  for (var i = 0; i < list.length; i++) {
+    final item = list[i];
+
+    if (item is Map<String, dynamic>) {
+      _removeSensitiveFields(item);
+    } else if (item is List) {
+      _removeSensitiveFieldsFromList(item);
+    } else if (item is String && (_isStripeToken(item) || _isPhoneNumber(item))) {
+      list[i] = '***REDACTED***';
+    }
+  }
 }
 
 // Detects Stripe tokens (pm_*, client secrets) and JWT bearer tokens
