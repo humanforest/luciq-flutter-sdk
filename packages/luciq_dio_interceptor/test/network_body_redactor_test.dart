@@ -98,6 +98,25 @@ void main() {
       expect(byEmail, contains('"code":"***REDACTED***"'));
     });
 
+    // RIDER-5636 (CodeRabbit follow-up): _isVerificationCode's value-based
+    // fallback (for a phone-shaped sibling under a key that doesn't say
+    // "phone"/"number"/"email") must not depend on map iteration order —
+    // an earlier field in the same object redacting its own phone-shaped
+    // value must not blind the check for a later `code` field.
+    test(
+      'redacts a verification code even when an unlabelled phone-shaped '
+      'sibling earlier in the map has already been redacted',
+      () {
+        final body = redactNetworkBody(<String, dynamic>{
+          'contactValue': '+447911123456',
+          'code': '123456',
+        });
+
+        expect(body, contains('"contactValue":"***REDACTED***"'));
+        expect(body, contains('"code":"***REDACTED***"'));
+      },
+    );
+
     // RIDER-5636: `code` is also a plain plan/bundle identifier elsewhere in
     // this API, so it must only be redacted when it looks like a
     // verification code (paired with a phone or email), not on every

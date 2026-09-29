@@ -280,8 +280,13 @@ bool _isVerificationCode(String key, Map<String, dynamic> siblings) {
 }
 
 void _removeSensitiveFields(Map<String, dynamic> map) {
+  // Snapshot the original values before this loop starts redacting them in
+  // place — _isVerificationCode's value-based fallback check must see a
+  // sibling's real value, not '***REDACTED***' left behind by an earlier
+  // iteration of this same loop.
+  final originalValues = Map<String, dynamic>.of(map);
   map.forEach((key, value) {
-    if (_matchesSensitiveKey(key) || _isVerificationCode(key, map)) {
+    if (_matchesSensitiveKey(key) || _isVerificationCode(key, originalValues)) {
       map[key] = '***REDACTED***';
     } else if (value is String &&
         (_isStripeToken(value) || _isPhoneNumber(value))) {
