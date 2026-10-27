@@ -182,4 +182,81 @@ void main() {
       expect(body, contains('"phoneNumber":"***REDACTED***"'));
     });
   });
+
+  // RIDER-5789: the key checks are cached per key name.
+  group('redactNetworkBody with cached key checks', () {
+    test('gives the same result when the same body is redacted again', () {
+      final payload = <String, dynamic>{
+        'email': 'ada@example.com',
+        'phoneNumber': '+447911123456',
+        'name': 'Bike 1234',
+      };
+
+      final first = redactNetworkBody(payload);
+      final second = redactNetworkBody(payload);
+
+      expect(second, first);
+      expect(second, contains('"email":"***REDACTED***"'));
+      expect(second, contains('"phoneNumber":"***REDACTED***"'));
+      expect(second, contains('"name":"Bike 1234"'));
+    });
+
+    test('redacts every item of a large list', () {
+      final body = redactNetworkBody(<String, dynamic>{
+        'data': [
+          for (var i = 0; i < 500; i++)
+            <String, dynamic>{
+              'id': i,
+              'lat': 51.5,
+              'lng': -0.12,
+              'lastRider': <String, dynamic>{'email': 'rider$i@example.com'},
+            },
+        ],
+      });
+
+      expect(body, isNot(contains('@example.com')));
+      expect(
+        '"email":"***REDACTED***"'.allMatches(body).length,
+        500,
+      );
+      expect(body, contains('"lat":51.5'));
+    });
+
+    test('still checks the value of a key that is not sensitive by name', () {
+      final first = redactNetworkBody(<String, dynamic>{
+        'note': '+447911123456',
+      });
+      final second = redactNetworkBody(<String, dynamic>{
+        'note': 'Left at the station',
+      });
+
+      expect(first, contains('"note":"***REDACTED***"'));
+      expect(second, contains('"note":"Left at the station"'));
+    });
+
+    test('still checks the siblings of a bare code', () {
+      final verification = redactNetworkBody(<String, dynamic>{
+        'phone': '+447911123456',
+        'code': '123456',
+      });
+      final plan = redactNetworkBody(<String, dynamic>{
+        'code': '25',
+        'title': 'Forest Flex',
+      });
+
+      expect(verification, contains('"code":"***REDACTED***"'));
+      expect(plan, contains('"code":"25"'));
+    });
+
+    test('keeps redacting when there are more keys than the cache holds', () {
+      final body = redactNetworkBody(<String, dynamic>{
+        for (var i = 0; i < 2500; i++)
+          'customer$i': <String, dynamic>{'email': 'rider$i@example.com'},
+        'password': 'secret',
+      });
+
+      expect(body, isNot(contains('@example.com')));
+      expect(body, contains('"password":"***REDACTED***"'));
+    });
+  });
 }

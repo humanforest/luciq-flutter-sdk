@@ -233,26 +233,53 @@ String redactNetworkBody(dynamic data) {
   }
 }
 
+final _camelCaseBoundary = RegExp('([a-z0-9])([A-Z])');
+final _wordSeparator = RegExp('[^a-z0-9]+');
+final _stripeSecret = RegExp('^[a-z]{2,}_[A-Za-z0-9]+_secret_');
+final _e164PhoneNumber = RegExp(r'^\+[1-9]\d{6,14}$');
+
+// RIDER-5789: a large response (e.g. the bike list) repeats the same few
+// field names thousands of times, and checking each one ran ~40 regular
+// expressions on the main thread, which froze the app at launch. Both results
+// depend only on the key name, so each name is worked out once. Checks that
+// depend on the value or on sibling fields still run every time. The caches
+// are cleared when they get large, in case a body uses ids as map keys.
+const _maxCachedKeys = 2000;
+final _wordsCache = <String, List<String>>{};
+final _sensitiveKeyCache = <String, bool>{};
+final _sensitivePatterns = [
+  for (final sensitive in _sensitiveKeys) '_${_wordsOf(sensitive).join('_')}_',
+];
+
 // Splits a key into lowercase word tokens on camelCase boundaries and
 // separators (_, -, space), so 'phone' matches 'phoneNumber'/'phone_number'
 // but not 'microphoneEnabled'/'headphoneJack'.
 List<String> _wordsOf(String key) {
+  final cached = _wordsCache[key];
+  if (cached != null) return cached;
+
   final withBoundaries = key.replaceAllMapped(
-    RegExp('([a-z0-9])([A-Z])'),
+    _camelCaseBoundary,
     (m) => '${m[1]}_${m[2]}',
   );
-  return withBoundaries
-      .toLowerCase()
-      .split(RegExp('[^a-z0-9]+'))
-      .where((word) => word.isNotEmpty)
-      .toList();
+  final words = List<String>.unmodifiable(
+    withBoundaries
+        .toLowerCase()
+        .split(_wordSeparator)
+        .where((word) => word.isNotEmpty),
+  );
+  if (_wordsCache.length >= _maxCachedKeys) _wordsCache.clear();
+  return _wordsCache[key] = words;
 }
 
 bool _matchesSensitiveKey(String key) {
+  final cached = _sensitiveKeyCache[key];
+  if (cached != null) return cached;
+
   final normalized = '_${_wordsOf(key).join('_')}_';
-  return _sensitiveKeys.any(
-    (sensitive) => normalized.contains('_${_wordsOf(sensitive).join('_')}_'),
-  );
+  final isSensitive = _sensitivePatterns.any(normalized.contains);
+  if (_sensitiveKeyCache.length >= _maxCachedKeys) _sensitiveKeyCache.clear();
+  return _sensitiveKeyCache[key] = isSensitive;
 }
 
 // A bare `code` field is ambiguous across this API: it's the OTP/SMS
@@ -317,7 +344,7 @@ void _removeSensitiveFieldsFromList(List<dynamic> list) {
 // Detects Stripe tokens (pm_*, client secrets) and JWT bearer tokens
 bool _isStripeToken(String value) {
   if (value.startsWith('pm_')) return true;
-  if (RegExp('^[a-z]{2,}_[A-Za-z0-9]+_secret_').hasMatch(value)) return true;
+  if (_stripeSecret.hasMatch(value)) return true;
   // JWTs always start with base64url-encoded '{"' → eyJ
   if (value.startsWith('eyJ')) return true;
   return false;
@@ -326,5 +353,5 @@ bool _isStripeToken(String value) {
 // Detects E.164-formatted phone numbers (e.g. +447911123456) even when
 // logged under a key name that doesn't otherwise flag as sensitive.
 bool _isPhoneNumber(String value) {
-  return RegExp(r'^\+[1-9]\d{6,14}$').hasMatch(value);
+  return _e164PhoneNumber.hasMatch(value);
 }
